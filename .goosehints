@@ -156,6 +156,12 @@ my_project/
     └── design.md
 ```
 
+- **`requirements.txt`**: Lists the Python dependencies for the project.
+  ```
+  PyYAML
+  pocketflow
+  ```
+
 - **`docs/design.md`**: Contains project documentation for each step above. This should be *high-level* and *no-code*.
   ~~~
   # Design Doc: Your Project Name
