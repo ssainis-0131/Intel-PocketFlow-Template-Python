@@ -8,6 +8,72 @@ title: "Agentic Refactoring and Package Development for Task-Pipeline-Kernel to 
 > If you are an AI agent helping develop or refactor the task-pipeline-kernel architecture to PocketFlow primitives, read this guide **VERY, VERY** carefully! This refactoring maintains scikit-learn compatibility while leveraging PocketFlow's flexibility and modularity.
 {: .warning }
 
+## MANDATORY: Systems Design Collaboration Required
+
+> **🛑 STOP! Before proceeding with any refactoring implementation, you MUST complete the systems design phase with the user.**
+> 
+> **As an AI Agent, you are required to:**
+> 1. **Demand** that the user first articulate the specific refactoring goals and requirements
+> 2. **Insist** on understanding the current system architecture and pain points  
+> 3. **Collaborate** on designing the target architecture before writing any code
+> 4. **Validate** the design approach with the user before implementation
+> 
+> **DO NOT** jump straight into coding. Follow the PocketFlow principle: **"Humans Design, Agents Code!"**
+{: .error }
+
+### Required Systems Design Steps
+
+Before implementing any refactoring, work with the user to complete these design steps:
+
+#### 1. **Requirements Clarification** (MANDATORY)
+Ask the user to specify:
+- **What specific problems** are they trying to solve with this refactoring?
+- **Which existing classes/pipelines** need to be refactored first (start small)?
+- **What compatibility requirements** must be maintained (scikit-learn, existing APIs)?
+- **What are the success criteria** for the refactoring?
+
+#### 2. **Current Architecture Assessment** (MANDATORY)  
+Work with the user to understand:
+- **Current pain points** in the existing task-pipeline-kernel architecture
+- **Existing dependencies** that must be preserved
+- **Current usage patterns** that inform the design
+- **Integration points** with other systems
+
+#### 3. **Target Architecture Design** (MANDATORY)
+Collaborate with the user to design:
+- **Which foundational components** (EnhancedSharedStore, BaseDataNode, SklearnCompatibleNode) are needed?
+- **How will data flow** through the new architecture?
+- **What the inheritance hierarchy** should look like
+- **How to maintain backward compatibility** during transition
+
+#### 4. **Implementation Strategy** (MANDATORY)
+Plan together:
+- **Which components to build first** (start with foundations)
+- **How to test each component** before moving to the next
+- **Migration path** from old to new architecture
+- **Rollback plan** if issues arise
+
+#### 5. **Design Validation** (MANDATORY)
+Before coding, ensure the user confirms:
+- ✅ The design meets their specific requirements
+- ✅ The approach maintains necessary compatibility  
+- ✅ The implementation plan is clear and achievable
+- ✅ They understand the benefits and tradeoffs
+
+### Sample Conversation Starter
+
+**Agent:** "I see you want to refactor your task-pipeline-kernel architecture to use PocketFlow. Before I start implementing anything, I need to understand your specific requirements and design the solution with you.
+
+**Could you please tell me:**
+1. **What specific problems** are you experiencing with your current architecture?
+2. **Which particular classes or pipelines** would you like to refactor first? (Let's start small)  
+3. **What existing functionality** must absolutely continue to work unchanged?
+4. **What would success look like** for this refactoring?
+
+Once I understand your needs, we'll design the target architecture together, then I'll implement it step by step."
+
+---
+
 ## Core Architecture Mapping
 
 ### Foundational Components (New Additions)
@@ -32,6 +98,9 @@ The refactoring introduces three foundational components that provide the core f
 | Dataset management | **EnhancedSharedStore** + **BaseDataNode** | Data flow via shared store, dataset ops via BaseDataNode |
 
 ## Refactoring Steps
+
+> **⚠️ PREREQUISITE CHECK:** Before proceeding with any of the steps below, ensure you have completed the **Systems Design Collaboration** phase above. Do NOT implement anything until the user has confirmed the design approach.
+{: .warning }
 
 ### Step 1: Repository Structure Enhancement (Maintaining Backward Compatibility)
 
@@ -563,7 +632,6 @@ class BaseTaskWithPocketFlow(BaseEstimator, Generic[T, V]):
         self.pipelines.append(pipeline)
         self.logger.info(f"Added pipeline: {pipeline.__class__.__name__}")
 ```
-```
 
 #### 2.3 Usage Examples
 
@@ -625,191 +693,6 @@ sklearn_pipeline = Pipeline([
 # All sklearn functionality works
 from sklearn.model_selection import cross_val_score, GridSearchCV
 scores = cross_val_score(sklearn_pipeline, X_train, y_train, cv=5)
-```
-```
-
-### Step 3: Pipeline-Specific Flows
-
-*Note: This section remains unchanged from the original document as it represents concrete implementation details for specific use cases.*
-
-```python
-# core_tools/core/pocketflow_enhanced/base_flows.py
-from pocketflow import Flow, Node
-from typing import Any, Dict, Optional
-import pandas as pd
-
-class PocketFlowPipelineAdapter:
-    """Adapter to bridge existing pipelines with PocketFlow execution."""
-    
-    def __init__(self, original_pipeline):
-        self.original_pipeline = original_pipeline
-        self.shared_store = EnhancedSharedStore()
-        self._create_pocketflow_nodes()
-    
-    def _create_pocketflow_nodes(self):
-        """Create PocketFlow nodes from original pipeline methods."""
-        # Create nodes for each abstract method in the original pipeline
-        self.nodes = []
-        
-        # Example for BaseDataWranglingPipeline
-        if hasattr(self.original_pipeline, '_clean_data'):
-            self.nodes.append(CleanDataNode(self.original_pipeline))
-        if hasattr(self.original_pipeline, '_feature_engineering'):
-            self.nodes.append(FeatureEngineeringNode(self.original_pipeline))
-        if hasattr(self.original_pipeline, '_populate_ancilliary'):
-            self.nodes.append(PopulateAncilliaryNode(self.original_pipeline))
-        
-        # Connect nodes in sequence
-        for i in range(len(self.nodes) - 1):
-            self.nodes[i] >> self.nodes[i+1]
-        
-        # Create flow
-        if self.nodes:
-            self.flow = Flow(start=self.nodes[0])
-    
-    def fit(self, X: pd.DataFrame, y: Optional[pd.Series] = None):
-        """Fit using PocketFlow execution."""
-        self.shared_store.set_dataset("input_dataset", X)
-        if y is not None:
-            self.shared_store.set_dataset("target", y)
-        
-        self.shared_store.data["mode"] = "fit"
-        self.flow.run(self.shared_store.data)
-        return self.original_pipeline
-    
-    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
-        """Transform using PocketFlow execution."""
-        self.shared_store.set_dataset("input_dataset", X)
-        self.shared_store.data["mode"] = "transform"
-        self.flow.run(self.shared_store.data)
-        return self.shared_store.get_dataset("output_dataset")
-    
-    def run(self):
-        """Execute the flow."""
-        return self.flow.run(self.shared_store.data)
-
-class PipelineMethodNode(Node):
-    """Base node that wraps existing pipeline methods."""
-    
-    def __init__(self, original_pipeline, method_name: str, **kwargs):
-        super().__init__(**kwargs)
-        self.original_pipeline = original_pipeline
-        self.method_name = method_name
-    
-    def prep(self, shared):
-        """Extract data for the method."""
-        return {
-            "dataset": shared["datasets"].get("input_dataset", pd.DataFrame()),
-            "config": shared.get("config", {}),
-            "original_pipeline": self.original_pipeline
-        }
-    
-    def exec(self, prep_res):
-        """Execute the original pipeline method."""
-        method = getattr(prep_res["original_pipeline"], self.method_name)
-        return method(prep_res["dataset"])
-    
-    def post(self, shared, prep_res, exec_res):
-        """Update shared store."""
-        shared["datasets"]["output_dataset"] = exec_res
-        return "default"
-```
-
-```python
-# src/pocketflow_core_tools/core/base_nodes.py
-from abc import ABC, abstractmethod
-from typing import Any, Optional, Dict
-from pocketflow import Node
-import pandas as pd
-
-class BaseDataNode(Node):
-    """Base class for nodes that work with datasets."""
-    
-    def __init__(self, dataset_input: str = "input_dataset", 
-                 dataset_output: str = "output_dataset", **kwargs):
-        super().__init__(**kwargs)
-        self.dataset_input = dataset_input
-        self.dataset_output = dataset_output
-    
-    def prep(self, shared):
-        """Prepare data from shared store."""
-        store = shared if hasattr(shared, 'get_dataset') else EnhancedSharedStore()
-        store.data.update(shared if isinstance(shared, dict) else {})
-        return {
-            "dataset": store.get_dataset(self.dataset_input),
-            "config": store.get_config(self.__class__.__name__.lower()),
-            "store": store
-        }
-    
-    def post(self, shared, prep_res, exec_res):
-        """Store results back to shared store."""
-        store = prep_res["store"]
-        if isinstance(exec_res, pd.DataFrame):
-            store.set_dataset(self.dataset_output, exec_res)
-        elif isinstance(exec_res, dict) and "dataset" in exec_res:
-            store.set_dataset(self.dataset_output, exec_res["dataset"])
-            # Store additional artifacts
-            for key, value in exec_res.items():
-                if key != "dataset":
-                    store.data[key] = value
-        
-        # Update shared reference
-        shared.update(store.data)
-        return "default"
-
-class SklearnCompatibleNode(BaseDataNode):
-    """Node that maintains scikit-learn compatibility."""
-    
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.is_fitted_ = False
-        self.feature_names_in_ = None
-        self.n_features_in_ = None
-    
-    def fit(self, X: pd.DataFrame, y: Optional[pd.Series] = None):
-        """Scikit-learn compatible fit method."""
-        # Store scikit-learn metadata
-        self.feature_names_in_ = X.columns.tolist() if hasattr(X, 'columns') else None
-        self.n_features_in_ = X.shape[1] if hasattr(X, 'shape') else None
-        
-        # Call internal fit logic
-        self._fit_impl(X, y)
-        self.is_fitted_ = True
-        return self
-    
-    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
-        """Scikit-learn compatible transform method."""
-        if not self.is_fitted_:
-            raise ValueError("This node has not been fitted yet.")
-        return self._transform_impl(X)
-    
-    def fit_transform(self, X: pd.DataFrame, y: Optional[pd.Series] = None) -> pd.DataFrame:
-        """Scikit-learn compatible fit_transform method."""
-        return self.fit(X, y).transform(X)
-    
-    @abstractmethod
-    def _fit_impl(self, X: pd.DataFrame, y: Optional[pd.Series] = None):
-        """Internal fit implementation."""
-        pass
-    
-    @abstractmethod
-    def _transform_impl(self, X: pd.DataFrame) -> pd.DataFrame:
-        """Internal transform implementation."""
-        pass
-    
-    def exec(self, prep_res):
-        """PocketFlow exec method integrates with sklearn methods."""
-        dataset = prep_res["dataset"]
-        config = prep_res["config"]
-        
-        # Determine operation mode
-        if config.get("mode", "transform") == "fit_transform":
-            y = prep_res.get("target", None)
-            return self.fit_transform(dataset, y)
-        elif hasattr(self, 'is_fitted_') and self.is_fitted_:
-            return self.transform(dataset)
-        else:
-            return self.fit_transform(dataset)
 ```
 
 ### Step 3: Pipeline-Specific Flows
@@ -1264,6 +1147,9 @@ class ConfigurationManager:
 
 ## Refactoring Best Practices
 
+> **🔒 DESIGN VALIDATION CHECKPOINT:** Before implementing any of these practices, confirm with the user that your design approach aligns with their specific requirements and constraints. Do not assume - ask!
+{: .error }
+
 ### 1. **Start Small and Iterate**
 Begin by refactoring one pipeline at a time. Start with [`BaseDataWranglingPipeline`](../../../../../../../c:/Users/ssainis/OneDrive - Intel Corporation/Desktop/python_scripts/applications.manufacturing.intel.quality.tdqr.core-tools/core_tools/core/BasicPipelineObjects.py) as it has the simplest structure.
 
@@ -1390,4 +1276,15 @@ Flows can be nested and combined to create complex workflows.
 ### 5. **Scikit-learn Integration**
 Maintains full compatibility with scikit-learn while adding PocketFlow's benefits.
 
-This refactoring transforms your task-pipeline-kernel architecture into a more flexible, testable, and maintainable system while preserving all existing functionality and scikit-learn compatibility.
+---
+
+## Final Agent Reminder
+
+> **🎯 REMEMBER: Design First, Code Second**
+> 
+> This refactoring transforms your task-pipeline-kernel architecture into a more flexible, testable, and maintainable system while preserving all existing functionality and scikit-learn compatibility.
+> 
+> **But only implement what the user actually needs, based on their specific requirements that you gathered during the Systems Design Collaboration phase.**
+> 
+> **Success = User-Driven Design + Agent Implementation**
+{: .success }
