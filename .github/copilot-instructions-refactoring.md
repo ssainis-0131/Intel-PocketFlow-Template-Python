@@ -1,11 +1,11 @@
 ---
 layout: default
-title: "Agentic Refactoring for Task-Pipeline-Kernel to PocketFlow"
+title: "Agentic Refactoring and Package Development for Task-Pipeline-Kernel to PocketFlow"
 ---
 
 # Agentic Refactoring: Task-Pipeline-Kernel to PocketFlow Architecture
 
-> If you are an AI agent helping refactor the task-pipeline-kernel architecture to PocketFlow primitives, read this guide **VERY, VERY** carefully! This refactoring maintains scikit-learn compatibility while leveraging PocketFlow's flexibility and modularity.
+> If you are an AI agent helping develop or refactor the task-pipeline-kernel architecture to PocketFlow primitives, read this guide **VERY, VERY** carefully! This refactoring maintains scikit-learn compatibility while leveraging PocketFlow's flexibility and modularity.
 {: .warning }
 
 ## Core Architecture Mapping
@@ -20,61 +20,116 @@ title: "Agentic Refactoring for Task-Pipeline-Kernel to PocketFlow"
 
 ## Refactoring Steps
 
-### Step 1: Repository Structure Transformation
+### Step 1: Repository Structure Enhancement (Maintaining Backward Compatibility)
 
-Transform the existing core-tools structure to PocketFlow-compatible architecture:
+**IMPORTANT**: Maintain the existing core-tools structure and add PocketFlow capabilities as optional enhancements. This ensures existing applications continue to work without modification.
 
 ```
-refactored_core_tools/
-├── src/
-│   └── pocketflow_core_tools/
-│       ├── __init__.py                    # Package initialization
-│       ├── core/                          # Core PocketFlow abstractions
-│       │   ├── __init__.py
-│       │   ├── base_nodes.py              # Base Node classes
-│       │   ├── base_flows.py              # Base Flow classes
-│       │   └── shared_store.py            # Enhanced shared store
-│       ├── pipelines/                     # Pipeline-specific implementations
-│       │   ├── __init__.py
-│       │   ├── data_wrangling/            # Data wrangling pipeline flows
-│       │   │   ├── __init__.py
-│       │   │   ├── flows.py               # DataWranglingFlow
-│       │   │   └── nodes.py               # Specialized nodes
-│       │   ├── preprocessing/             # Preprocessing pipeline flows
-│       │   │   ├── __init__.py
-│       │   │   ├── flows.py               # PreProcessingFlow
-│       │   │   └── nodes.py               # Filter, encode, normalize nodes
-│       │   └── model_training/            # Model training pipeline flows
-│       │       ├── __init__.py
-│       │       ├── flows.py               # ModelTrainingFlow
-│       │       └── nodes.py               # Training-specific nodes
-│       ├── tasks/                         # Task-level orchestration
-│       │   ├── __init__.py
-│       │   ├── experiment_flows.py        # ExperimentFlow (was BaseExperiment)
-│       │   └── poe_flows.py               # POEFlow (was BasePOE)
-│       ├── utils/                         # Utility functions
-│       │   ├── __init__.py
-│       │   ├── config_loader.py           # YAML configuration utilities
-│       │   ├── dataset_utils.py           # Dataset manipulation utilities
-│       │   └── sklearn_compatibility.py   # Scikit-learn compatibility layer
-│       └── examples/                      # Usage examples
-│           ├── __init__.py
-│           └── basic_experiment.py
-├── tests/                                 # Test suite
-│   ├── unit/
-│   ├── integration/
-│   └── e2e/
-├── examples/                              # Extended examples
-├── docs/                                  # Documentation
-└── configs/                               # YAML configuration templates
+core_tools/                                # Keep existing structure
+├── __init__.py                           
+├── core/                                 # Existing core classes
+│   ├── __init__.py
+│   ├── BasicAuthObjects.py              # Keep existing
+│   ├── BasicComponentAssemblerObjects.py # Keep existing
+│   ├── BasicConnectorObjects.py         # Keep existing
+│   ├── BasicKernelObjects.py            # Keep existing
+│   ├── BasicMeasurementObjects.py       # Keep existing
+│   ├── BasicMixinObjects.py             # Keep existing
+│   ├── BasicObjectClasses.py            # Keep existing
+│   ├── BasicPipelineObjects.py          # ENHANCE with PocketFlow
+│   ├── BasicPOTObjects.py               # Keep existing
+│   ├── BasicTaskObjects.py              # ENHANCE with PocketFlow
+│   └── pocketflow_enhanced/             # NEW: PocketFlow enhancements
+│       ├── __init__.py
+│       ├── base_nodes.py                # PocketFlow base classes
+│       ├── base_flows.py                # PocketFlow flow classes
+│       ├── enhanced_pipelines.py        # PocketFlow-enhanced pipelines
+│       ├── enhanced_tasks.py            # PocketFlow-enhanced tasks
+│       └── shared_store.py              # Enhanced shared store
+├── data/                                 # Keep existing
+├── data_extractors/                      # Keep existing
+├── datasets/                             # Keep existing
+├── generators/                           # Keep existing
+├── report_adapters/                      # Keep existing
+├── reports/                              # Keep existing
+├── tests/                                # Keep existing
+└── utils/                                # Keep existing + add new
+    ├── __init__.py
+    ├── conversion_helpers.py             # Keep existing
+    ├── decorators.py                     # Keep existing
+    ├── helpers.py                        # Keep existing
+    └── pocketflow_utils.py               # NEW: PocketFlow utilities
 ```
 
-### Step 2: Core Abstractions Refactoring
+**Migration Strategy**: 
+1. **Existing Applications**: Continue to work without any changes
+2. **New Applications**: Can opt-in to PocketFlow enhancements
+3. **Gradual Migration**: Existing applications can gradually adopt PocketFlow features
 
-#### 2.1 Enhanced Shared Store Design
+### Step 2: Core Abstractions Enhancement (Non-Breaking)
+
+#### 2.1 Enhanced Existing Classes
+
+First, enhance existing classes to optionally support PocketFlow while maintaining backward compatibility:
 
 ```python
-# src/pocketflow_core_tools/core/shared_store.py
+# core_tools/core/BasicPipelineObjects.py (ENHANCED)
+from abc import ABC, abstractmethod
+from typing import Optional, Dict, Any
+import pandas as pd
+
+# Keep all existing classes exactly as they are
+class BasePipeline(ABC):
+    """Original BasePipeline - UNCHANGED for backward compatibility"""
+    # ... keep all existing methods exactly as they are
+    pass
+
+# Add NEW PocketFlow-enhanced version alongside existing
+class BasePipelineWithPocketFlow(BasePipeline):
+    """PocketFlow-enhanced version of BasePipeline."""
+    
+    def __init__(self, enable_pocketflow: bool = True, **kwargs):
+        super().__init__(**kwargs)
+        self.enable_pocketflow = enable_pocketflow
+        
+        if self.enable_pocketflow:
+            from .pocketflow_enhanced.base_flows import PocketFlowPipelineAdapter
+            self._pocketflow_adapter = PocketFlowPipelineAdapter(self)
+    
+    def run(self):
+        """Enhanced run method with optional PocketFlow execution."""
+        if self.enable_pocketflow and hasattr(self, '_pocketflow_adapter'):
+            return self._pocketflow_adapter.run()
+        else:
+            return super().run()  # Use original implementation
+    
+    # Add scikit-learn compatibility
+    def fit(self, X: pd.DataFrame, y: Optional[pd.Series] = None):
+        """Scikit-learn compatible fit method."""
+        if self.enable_pocketflow:
+            return self._pocketflow_adapter.fit(X, y)
+        else:
+            # Fallback to traditional implementation
+            self._X = X
+            self._y = y
+            self.run()
+            return self
+    
+    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
+        """Scikit-learn compatible transform method."""
+        if self.enable_pocketflow:
+            return self._pocketflow_adapter.transform(X)
+        else:
+            # Fallback implementation
+            self._X = X
+            self.run()
+            return self.output_dataset
+```
+
+#### 2.2 Enhanced Shared Store Design (New Addition)
+
+```python
+# core_tools/core/pocketflow_enhanced/shared_store.py
 from typing import Dict, Any, Optional, Union
 import pandas as pd
 from pathlib import Path
@@ -121,7 +176,90 @@ class EnhancedSharedStore:
         self.data["config"].update(config)
 ```
 
-#### 2.2 Base Node Classes
+#### 2.3 PocketFlow Adapter Classes (New Addition)
+
+```python
+# core_tools/core/pocketflow_enhanced/base_flows.py
+from pocketflow import Flow, Node
+from typing import Any, Dict, Optional
+import pandas as pd
+
+class PocketFlowPipelineAdapter:
+    """Adapter to bridge existing pipelines with PocketFlow execution."""
+    
+    def __init__(self, original_pipeline):
+        self.original_pipeline = original_pipeline
+        self.shared_store = EnhancedSharedStore()
+        self._create_pocketflow_nodes()
+    
+    def _create_pocketflow_nodes(self):
+        """Create PocketFlow nodes from original pipeline methods."""
+        # Create nodes for each abstract method in the original pipeline
+        self.nodes = []
+        
+        # Example for BaseDataWranglingPipeline
+        if hasattr(self.original_pipeline, '_clean_data'):
+            self.nodes.append(CleanDataNode(self.original_pipeline))
+        if hasattr(self.original_pipeline, '_feature_engineering'):
+            self.nodes.append(FeatureEngineeringNode(self.original_pipeline))
+        if hasattr(self.original_pipeline, '_populate_ancilliary'):
+            self.nodes.append(PopulateAncilliaryNode(self.original_pipeline))
+        
+        # Connect nodes in sequence
+        for i in range(len(self.nodes) - 1):
+            self.nodes[i] >> self.nodes[i+1]
+        
+        # Create flow
+        if self.nodes:
+            self.flow = Flow(start=self.nodes[0])
+    
+    def fit(self, X: pd.DataFrame, y: Optional[pd.Series] = None):
+        """Fit using PocketFlow execution."""
+        self.shared_store.set_dataset("input_dataset", X)
+        if y is not None:
+            self.shared_store.set_dataset("target", y)
+        
+        self.shared_store.data["mode"] = "fit"
+        self.flow.run(self.shared_store.data)
+        return self.original_pipeline
+    
+    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
+        """Transform using PocketFlow execution."""
+        self.shared_store.set_dataset("input_dataset", X)
+        self.shared_store.data["mode"] = "transform"
+        self.flow.run(self.shared_store.data)
+        return self.shared_store.get_dataset("output_dataset")
+    
+    def run(self):
+        """Execute the flow."""
+        return self.flow.run(self.shared_store.data)
+
+class PipelineMethodNode(Node):
+    """Base node that wraps existing pipeline methods."""
+    
+    def __init__(self, original_pipeline, method_name: str, **kwargs):
+        super().__init__(**kwargs)
+        self.original_pipeline = original_pipeline
+        self.method_name = method_name
+    
+    def prep(self, shared):
+        """Extract data for the method."""
+        return {
+            "dataset": shared["datasets"].get("input_dataset", pd.DataFrame()),
+            "config": shared.get("config", {}),
+            "original_pipeline": self.original_pipeline
+        }
+    
+    def exec(self, prep_res):
+        """Execute the original pipeline method."""
+        method = getattr(prep_res["original_pipeline"], self.method_name)
+        return method(prep_res["dataset"])
+    
+    def post(self, shared, prep_res, exec_res):
+        """Update shared store."""
+        shared["datasets"]["output_dataset"] = exec_res
+        return "default"
+```
 
 ```python
 # src/pocketflow_core_tools/core/base_nodes.py
@@ -676,22 +814,34 @@ class ConfigurationManager:
 Begin by refactoring one pipeline at a time. Start with [`BaseDataWranglingPipeline`](../../../../../../../c:/Users/ssainis/OneDrive - Intel Corporation/Desktop/python_scripts/applications.manufacturing.intel.quality.tdqr.core-tools/core_tools/core/BasicPipelineObjects.py) as it has the simplest structure.
 
 ### 2. **Maintain Backward Compatibility**
-Create compatibility wrappers that allow existing code to work with the new PocketFlow-based architecture:
+All existing classes remain unchanged. New features are added as optional enhancements:
 
 ```python
-# Legacy compatibility wrapper
-class BaseDataWranglingPipeline:
-    """Compatibility wrapper for legacy code."""
-    
-    def __init__(self, *args, **kwargs):
-        # Map old parameters to new PocketFlow configuration
-        config = self._map_legacy_params(*args, **kwargs)
-        self.flow = DataWranglingFlow(config)
-        self.shared_store = EnhancedSharedStore()
+# Example: Existing applications continue to work
+from core_tools.core.BasicPipelineObjects import BaseDataWranglingPipeline
+
+# This still works exactly as before
+class MyExistingPipeline(BaseDataWranglingPipeline):
+    def _clean_data(self, dataset):
+        # Original implementation unchanged
+        return cleaned_data
     
     def run(self):
-        """Legacy run method."""
-        return self.flow.run(self.shared_store.data)
+        # Original method unchanged
+        return super().run()
+
+# NEW: Applications can opt-in to PocketFlow enhancements
+class MyEnhancedPipeline(BasePipelineWithPocketFlow):
+    def _clean_data(self, dataset):
+        # Same implementation, now with PocketFlow benefits
+        return cleaned_data
+    
+    # Now supports scikit-learn interface
+    def fit(self, X, y=None):
+        return super().fit(X, y)
+    
+    def transform(self, X):
+        return super().transform(X)
 ```
 
 ### 3. **Preserve Scikit-learn Integration**
@@ -746,11 +896,28 @@ class TestDataWranglingFlow(unittest.TestCase):
 
 ### 5. **Migration Strategy**
 
-1. **Phase 1**: Refactor core abstractions ([`BasePipeline`](../../../../../../../c:/Users/ssainis/OneDrive - Intel Corporation/Desktop/python_scripts/applications.manufacturing.intel.quality.tdqr.core-tools/core_tools/core/BasicPipelineObjects.py) → Flow)
-2. **Phase 2**: Refactor individual pipeline types
-3. **Phase 3**: Refactor task-level orchestration ([`BaseExperiment`](../../../../../../../c:/Users/ssainis/OneDrive - Intel Corporation/Desktop/python_scripts/applications.manufacturing.intel.quality.tdqr.core-tools/core_tools/core/BasicTaskObjects.py) → ExperimentFlow)
-4. **Phase 4**: Add enhanced features (async processing, parallel execution)
-5. **Phase 5**: Optimize and add advanced PocketFlow patterns
+1. **Phase 1**: Add PocketFlow enhancements to existing classes (no breaking changes)
+2. **Phase 2**: Create opt-in enhanced versions of pipelines
+3. **Phase 3**: Add scikit-learn compatibility layer
+4. **Phase 4**: Gradually migrate individual applications to use enhanced versions
+5. **Phase 5**: Add advanced PocketFlow patterns (async, batch processing)
+
+**Application Migration Example**:
+```python
+# Step 1: Existing application (no changes needed)
+from core_tools.core.BasicTaskObjects import BaseExperiment
+
+class MyExperiment(BaseExperiment):
+    # Existing code works unchanged
+    pass
+
+# Step 2: Opt-in to enhancements when ready
+from core_tools.core.BasicTaskObjects import BaseExperimentWithPocketFlow
+
+class MyEnhancedExperiment(BaseExperimentWithPocketFlow):
+    # Same interface, enhanced capabilities
+    pass
+```
 
 ## Expected Benefits
 
