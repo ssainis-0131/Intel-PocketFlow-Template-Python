@@ -10,13 +10,26 @@ title: "Agentic Refactoring and Package Development for Task-Pipeline-Kernel to 
 
 ## Core Architecture Mapping
 
-| Core-Tools Concept | PocketFlow Primitive | Refactoring Strategy |
-|:-------------------|:--------------------|:---------------------|
-| [`BaseTask`](../../../../../../../c:/Users/ssainis/OneDrive - Intel Corporation/Desktop/python_scripts/applications.manufacturing.intel.quality.tdqr.core-tools/core_tools/core/BasicTaskObjects.py) | **Flow** (High-level orchestrator) | Transform to master Flow that orchestrates pipeline sub-flows |
-| [`BasePipeline`](../../../../../../../c:/Users/ssainis/OneDrive - Intel Corporation/Desktop/python_scripts/applications.manufacturing.intel.quality.tdqr.core-tools/core_tools/core/BasicPipelineObjects.py) | **Flow** (Sub-workflow) | Convert to specialized Flows with domain-specific nodes |
-| Pipeline abstract methods | **Node** | Each abstract method becomes a specialized Node |
-| YAML configuration | **Shared Store** | Configuration management through enhanced shared store |
-| Dataset management | **Shared Store** + **Params** | Data flow via shared store, identifiers via params |
+### Foundational Components (New Additions)
+
+The refactoring introduces three foundational components that provide the core functionality:
+
+| Foundational Component | Purpose | Key Features |
+|:----------------------|:--------|:-------------|
+| **EnhancedSharedStore** | Data management and configuration | YAML configs, dataset storage, metadata tracking, file paths |
+| **BaseDataNode** | Base class for dataset operations | Dataset input/output handling, shared store integration |
+| **SklearnCompatibleNode** | ML compatibility foundation | scikit-learn interface (fit/transform), PyTorch interface (train/predict), type safety, logging |
+
+### Architecture Mapping (Building on Foundation)
+
+| Core-Tools Concept | Maps to Foundation + PocketFlow | Refactoring Strategy |
+|:-------------------|:--------------------------------|:---------------------|
+| [`BaseTask`](../../../../../../../c:/Users/ssainis/OneDrive - Intel Corporation/Desktop/python_scripts/applications.manufacturing.intel.quality.tdqr.core-tools/core_tools/core/BasicTaskObjects.py) | **SklearnCompatibleNode** → **Flow** | Enhanced BaseTask inherits from foundation, orchestrates pipeline sub-flows |
+| [`BasePipeline`](../../../../../../../c:/Users/ssainis/OneDrive - Intel Corporation/Desktop/python_scripts/applications.manufacturing.intel.quality.tdqr.core-tools/core_tools/core/BasicPipelineObjects.py) | **SklearnCompatibleNode** → **Flow** | Enhanced BasePipeline inherits from foundation, converts to specialized Flows |
+| [`BaseKernel`](../../../../../../../c:/Users/ssainis/OneDrive - Intel Corporation/Desktop/python_scripts/applications.manufacturing.intel.quality.tdqr.core-tools/core_tools/core/BasicKernelObjects.py) | **SklearnCompatibleNode** → **Node** | Enhanced BaseKernel inherits from foundation, becomes PocketFlow Node |
+| Pipeline abstract methods | **SklearnCompatibleNode** → **Node** | Each abstract method becomes specialized Node inheriting from foundation |
+| YAML configuration | **EnhancedSharedStore** | Configuration management through enhanced shared store |
+| Dataset management | **EnhancedSharedStore** + **BaseDataNode** | Data flow via shared store, dataset ops via BaseDataNode |
 
 ## Refactoring Steps
 
@@ -32,7 +45,7 @@ core_tools/                                # Keep existing structure
 │   ├── BasicAuthObjects.py              # Keep existing
 │   ├── BasicComponentAssemblerObjects.py # Keep existing
 │   ├── BasicConnectorObjects.py         # Keep existing
-│   ├── BasicKernelObjects.py            # Keep existing
+│   ├── BasicKernelObjects.py            # ENHANCE with PocketFlow
 │   ├── BasicMeasurementObjects.py       # Keep existing
 │   ├── BasicMixinObjects.py             # Keep existing
 │   ├── BasicObjectClasses.py            # Keep existing
@@ -41,6 +54,7 @@ core_tools/                                # Keep existing structure
 │   ├── BasicTaskObjects.py              # ENHANCE with PocketFlow
 │   └── pocketflow_enhanced/             # NEW: PocketFlow enhancements
 │       ├── __init__.py
+│       ├── base_kernels.py              # PocketFlow kernel classes
 │       ├── base_nodes.py                # PocketFlow base classes
 │       ├── base_flows.py                # PocketFlow flow classes
 │       ├── enhanced_pipelines.py        # PocketFlow-enhanced pipelines
@@ -68,65 +82,9 @@ core_tools/                                # Keep existing structure
 
 ### Step 2: Core Abstractions Enhancement (Non-Breaking)
 
-#### 2.1 Enhanced Existing Classes
+#### 2.1 Foundational Components
 
-First, enhance existing classes to optionally support PocketFlow while maintaining backward compatibility:
-
-```python
-# core_tools/core/BasicPipelineObjects.py (ENHANCED)
-from abc import ABC, abstractmethod
-from typing import Optional, Dict, Any
-import pandas as pd
-
-# Keep all existing classes exactly as they are
-class BasePipeline(ABC):
-    """Original BasePipeline - UNCHANGED for backward compatibility"""
-    # ... keep all existing methods exactly as they are
-    pass
-
-# Add NEW PocketFlow-enhanced version alongside existing
-class BasePipelineWithPocketFlow(BasePipeline):
-    """PocketFlow-enhanced version of BasePipeline."""
-    
-    def __init__(self, enable_pocketflow: bool = True, **kwargs):
-        super().__init__(**kwargs)
-        self.enable_pocketflow = enable_pocketflow
-        
-        if self.enable_pocketflow:
-            from .pocketflow_enhanced.base_flows import PocketFlowPipelineAdapter
-            self._pocketflow_adapter = PocketFlowPipelineAdapter(self)
-    
-    def run(self):
-        """Enhanced run method with optional PocketFlow execution."""
-        if self.enable_pocketflow and hasattr(self, '_pocketflow_adapter'):
-            return self._pocketflow_adapter.run()
-        else:
-            return super().run()  # Use original implementation
-    
-    # Add scikit-learn compatibility
-    def fit(self, X: pd.DataFrame, y: Optional[pd.Series] = None):
-        """Scikit-learn compatible fit method."""
-        if self.enable_pocketflow:
-            return self._pocketflow_adapter.fit(X, y)
-        else:
-            # Fallback to traditional implementation
-            self._X = X
-            self._y = y
-            self.run()
-            return self
-    
-    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
-        """Scikit-learn compatible transform method."""
-        if self.enable_pocketflow:
-            return self._pocketflow_adapter.transform(X)
-        else:
-            # Fallback implementation
-            self._X = X
-            self.run()
-            return self.output_dataset
-```
-
-#### 2.2 Enhanced Shared Store Design (New Addition)
+**Enhanced Shared Store (New Foundation)**:
 
 ```python
 # core_tools/core/pocketflow_enhanced/shared_store.py
@@ -176,7 +134,503 @@ class EnhancedSharedStore:
         self.data["config"].update(config)
 ```
 
-#### 2.3 PocketFlow Adapter Classes (New Addition)
+**Base Data Node (Foundation for all data operations)**:
+
+```python
+# core_tools/core/pocketflow_enhanced/base_nodes.py
+from abc import ABC, abstractmethod
+from typing import Any, Optional, Dict
+from pocketflow import Node
+import pandas as pd
+
+class BaseDataNode(Node):
+    """Base class for nodes that work with datasets."""
+    
+    def __init__(self, dataset_input: str = "input_dataset", 
+                 dataset_output: str = "output_dataset", **kwargs):
+        super().__init__(**kwargs)
+        self.dataset_input = dataset_input
+        self.dataset_output = dataset_output
+    
+    def prep(self, shared):
+        """Prepare data from shared store."""
+        store = shared if hasattr(shared, 'get_dataset') else EnhancedSharedStore()
+        store.data.update(shared if isinstance(shared, dict) else {})
+        return {
+            "dataset": store.get_dataset(self.dataset_input),
+            "config": store.get_config(self.__class__.__name__.lower()),
+            "store": store
+        }
+    
+    def post(self, shared, prep_res, exec_res):
+        """Store results back to shared store."""
+        store = prep_res["store"]
+        if isinstance(exec_res, pd.DataFrame):
+            store.set_dataset(self.dataset_output, exec_res)
+        elif isinstance(exec_res, dict) and "dataset" in exec_res:
+            store.set_dataset(self.dataset_output, exec_res["dataset"])
+            # Store additional artifacts
+            for key, value in exec_res.items():
+                if key != "dataset":
+                    store.data[key] = value
+        
+        # Update shared reference
+        shared.update(store.data)
+        return "default"
+```
+
+**Scikit-learn Compatible Node (Foundation for ML compatibility)**:
+
+```python
+# core_tools/core/pocketflow_enhanced/base_nodes.py (continued)
+from typing import Any, Optional, Dict, Union, TypeVar, Generic, Literal
+import logging
+from sklearn.base import BaseEstimator, TransformerMixin
+
+# Type variables for datasets
+T = TypeVar('T')  # Working dataset type
+U = TypeVar('U')  # Ancilliary dataset type
+V = TypeVar('V')  # Result type
+
+class SklearnCompatibleNode(BaseDataNode, BaseEstimator, TransformerMixin, Generic[T, U, V]):
+    """
+    Node that maintains scikit-learn compatibility with mode-aware execution.
+    
+    This serves as the foundation for all ML-compatible kernels and nodes.
+    """
+    
+    def __init__(self, logger: Optional[logging.Logger] = None, **kwargs):
+        super().__init__(**kwargs)
+        
+        # Set up logger
+        if logger is None:
+            self.logger = logging.getLogger(f"{self.__class__.__module__}.{self.__class__.__name__}")
+        else:
+            self.logger = logger
+        
+        # Scikit-learn compatibility attributes
+        self.is_fitted_ = False
+        self.feature_names_in_ = None
+        self.n_features_in_ = None
+        
+        # Initialize sklearn params
+        self.set_params(**kwargs)
+        
+        self.logger.debug(f"Initialized {self.__class__.__name__} with params: {kwargs}")
+    
+    # === scikit-learn interface ===
+    def fit(self, X: T, y: Optional[U] = None) -> 'SklearnCompatibleNode[T, U, V]':
+        """Scikit-learn compatible fit method."""
+        self.logger.info(f"Fitting {self.__class__.__name__}")
+        self.logger.debug(f"Fit input X shape: {getattr(X, 'shape', None)}")
+        
+        # Store scikit-learn metadata
+        self.feature_names_in_ = X.columns.tolist() if hasattr(X, 'columns') else None
+        self.n_features_in_ = X.shape[1] if hasattr(X, 'shape') else None
+        
+        # Create shared store for fit operation
+        shared: Dict[str, Any] = {
+            "working_dataset": X, 
+            "ancilliary_dataset": y,
+            "mode": "fit"
+        }
+        
+        # Execute using PocketFlow
+        self.logger.debug("Starting PocketFlow node execution in fit mode")
+        self.run(shared)
+        self.logger.debug("Completed PocketFlow node execution in fit mode")
+        
+        self.is_fitted_ = True
+        return self
+    
+    def transform(self, X: T) -> V:
+        """Scikit-learn compatible transform method."""
+        if not self.is_fitted_:
+            raise ValueError("This node has not been fitted yet.")
+            
+        self.logger.info(f"Transforming with {self.__class__.__name__}")
+        self.logger.debug(f"Transform input X shape: {getattr(X, 'shape', None)}")
+        
+        # Create shared store for transform operation
+        shared: Dict[str, Any] = {
+            "working_dataset": X, 
+            "ancilliary_dataset": getattr(self, "_fitted_data", None),
+            "mode": "transform"
+        }
+        
+        # Execute using PocketFlow
+        self.logger.debug("Starting PocketFlow node execution in transform mode")
+        self.run(shared)
+        self.logger.debug("Completed PocketFlow node execution in transform mode")
+        
+        result = shared["working_dataset"]
+        self.logger.debug(f"Transform output shape: {getattr(result, 'shape', None)}")
+        return result
+    
+    def fit_transform(self, X: T, y: Optional[U] = None) -> V:
+        """Scikit-learn compatible fit_transform method."""
+        return self.fit(X, y).transform(X)
+    
+    # === PyTorch-style interface ===
+    def train(self, X: T, y: Optional[U] = None) -> 'SklearnCompatibleNode[T, U, V]':
+        """PyTorch-style alias for fit() method."""
+        self.logger.info(f"Training {self.__class__.__name__} (alias for fit)")
+        return self.fit(X, y)
+    
+    def predict(self, X: T) -> V:
+        """PyTorch-style alias for transform() method."""
+        self.logger.info(f"Predicting with {self.__class__.__name__} (alias for transform)")
+        return self.transform(X)
+    
+    # === PocketFlow Node interface (mode-aware) ===
+    def prep(self, shared: Dict[str, Any]) -> Dict[str, Any]:
+        """Mode-aware preparation step."""
+        mode = shared.get("mode", "transform")
+        self.logger.debug(f"Preparing in {mode} mode")
+        
+        if mode == "fit":
+            return self._prep_fit(shared)
+        else:
+            return self._prep_transform(shared)
+    
+    def _prep_fit(self, shared: Dict[str, Any]) -> Dict[str, Any]:
+        """Preparation for fit mode (training). Override in subclasses."""
+        return {
+            "X": shared.get("working_dataset"),
+            "y": shared.get("ancilliary_dataset")
+        }
+    
+    def _prep_transform(self, shared: Dict[str, Any]) -> Any:
+        """Preparation for transform mode (inference). Override in subclasses."""
+        return shared.get("working_dataset")
+    
+    def exec(self, prep_res: Any) -> Any:
+        """Mode-aware execution."""
+        # Determine current mode from prep_res structure
+        if isinstance(prep_res, dict) and "X" in prep_res and "y" in prep_res:
+            mode = "fit"
+        else:
+            mode = "transform"
+            
+        self.logger.debug(f"Executing in {mode} mode")
+        
+        if mode == "fit":
+            return self._exec_fit(prep_res)
+        else:
+            return self._exec_transform(prep_res)
+    
+    def _exec_fit(self, prep_res: Dict[str, Any]) -> V:
+        """Execution for fit mode (training). Override in subclasses."""
+        # Default implementation: store the training data
+        self._fitted_data = prep_res
+        self.logger.debug("Default fit implementation (storing training data)")
+        return prep_res["X"]
+    
+    def _exec_transform(self, X: T) -> V:
+        """Execution for transform mode (inference). Override in subclasses."""
+        # Default implementation: identity transformation
+        self.logger.debug("Default transform implementation (identity function)")
+        return X
+    
+    def post(self, shared: Dict[str, Any], prep_res: Any, exec_res: Any) -> Literal["default"]:
+        """Mode-aware post-processing."""
+        mode = shared.get("mode", "transform")
+        self.logger.debug(f"Post-processing in {mode} mode")
+        
+        if mode == "fit":
+            return self._post_fit(shared, prep_res, exec_res)
+        else:
+            return self._post_transform(shared, prep_res, exec_res)
+    
+    def _post_fit(self, shared: Dict[str, Any], prep_res: Any, exec_res: Any) -> Literal["default"]:
+        """Post-processing for fit mode (training). Override in subclasses."""
+        shared["working_dataset"] = exec_res
+        self.logger.debug("Updated working_dataset in shared store after fit")
+        return "default"
+    
+    def _post_transform(self, shared: Dict[str, Any], prep_res: Any, exec_res: Any) -> Literal["default"]:
+        """Post-processing for transform mode (inference). Override in subclasses."""
+        shared["working_dataset"] = exec_res
+        self.logger.debug("Updated working_dataset in shared store after transform")
+        return "default"
+```
+
+#### 2.2 Enhanced Existing Classes (Building on Foundation)
+
+Now that we have the foundational components, we can enhance the existing classes by inheriting from them:
+
+**Enhanced Kernel Objects**:
+
+```python
+# core_tools/core/BasicKernelObjects.py (ENHANCED)
+from abc import ABC, abstractmethod
+
+# Keep all existing kernel classes exactly as they are for backward compatibility
+class BaseKernel(ABC):
+    """Original BaseKernel - UNCHANGED for backward compatibility"""
+    # ... keep all existing methods exactly as they are
+    pass
+
+# Add NEW PocketFlow-enhanced version that inherits from SklearnCompatibleNode
+class BaseKernelWithPocketFlow(SklearnCompatibleNode[T, U, V]):
+    """
+    PocketFlow-enhanced kernel that inherits from SklearnCompatibleNode.
+    
+    This provides all the scikit-learn compatibility, PyTorch-style interface,
+    and PocketFlow execution capabilities from the base class.
+    
+    Type Parameters:
+        T: Type of working dataset
+        U: Type of ancilliary dataset  
+        V: Type of transformed/result data
+    """
+    
+    def __init__(self, **kwargs):
+        """Initialize the enhanced kernel."""
+        super().__init__(**kwargs)
+        self.logger.info(f"Initialized {self.__class__.__name__} as PocketFlow-enhanced kernel")
+    
+    # The fit, transform, train, predict methods are inherited from SklearnCompatibleNode
+    # The prep, exec, post methods are inherited and can be overridden for custom behavior
+    
+    # Override these methods in concrete implementations:
+    def _exec_fit(self, prep_res: Dict[str, Any]) -> V:
+        """Override this for custom fit logic."""
+        return super()._exec_fit(prep_res)
+    
+    def _exec_transform(self, X: T) -> V:
+        """Override this for custom transform logic."""
+        return super()._exec_transform(X)
+```
+
+**Enhanced Pipeline Objects**:
+
+```python
+# core_tools/core/BasicPipelineObjects.py (ENHANCED)
+from typing import List, Optional
+from pocketflow import Flow
+
+# Keep all existing classes exactly as they are
+class BasePipeline(ABC):
+    """Original BasePipeline - UNCHANGED for backward compatibility"""
+    # ... keep all existing methods exactly as they are
+    pass
+
+# Add NEW PocketFlow-enhanced version that combines Flow with sklearn compatibility
+class BasePipelineWithPocketFlow(Flow, BaseEstimator, TransformerMixin, Generic[T, V]):
+    """
+    PocketFlow-enhanced pipeline that combines Flow with scikit-learn compatibility.
+    
+    This class orchestrates multiple BaseKernelWithPocketFlow instances.
+    """
+    
+    def __init__(self, kernels: Optional[List[BaseKernelWithPocketFlow]] = None, 
+                 logger: Optional[logging.Logger] = None, **kwargs):
+        """Initialize with a sequence of kernels."""
+        # Set up logger
+        if logger is None:
+            self.logger = logging.getLogger(f"{self.__class__.__module__}.{self.__class__.__name__}")
+        else:
+            self.logger = logger
+            
+        # Store kernels
+        self.kernels = kernels or []
+        
+        # Connect kernels in sequence using PocketFlow
+        for i in range(len(self.kernels) - 1):
+            self.kernels[i] >> self.kernels[i+1]
+        
+        # Initialize flow with first kernel as start if available
+        if self.kernels:
+            self.logger.info(f"Initializing pipeline with {len(self.kernels)} kernels")
+            Flow.__init__(self, start=self.kernels[0])
+        else:
+            self.logger.warning("Initializing empty pipeline with no kernels")
+            Flow.__init__(self)
+            
+        # Store sklearn params
+        self.set_params(**kwargs)
+    
+    # === scikit-learn interface ===
+    def fit(self, X: T, y: Optional[Any] = None) -> 'BasePipelineWithPocketFlow[T, V]':
+        """Fit the pipeline using PocketFlow's execution model."""
+        self.logger.info(f"Fitting {self.__class__.__name__} with {len(self.kernels)} kernels")
+        
+        shared: Dict[str, Any] = {
+            "working_dataset": X, 
+            "ancilliary_dataset": y,
+            "mode": "fit"
+        }
+        
+        self.run(shared)
+        return self
+        
+    def transform(self, X: T) -> V:
+        """Transform using PocketFlow's execution model."""
+        self.logger.info(f"Transforming with {self.__class__.__name__}")
+        
+        shared: Dict[str, Any] = {
+            "working_dataset": X,
+            "mode": "transform"
+        }
+        
+        self.run(shared)
+        return shared["working_dataset"]
+    
+    # === PyTorch-style interface ===  
+    def train(self, X: T, y: Optional[Any] = None) -> 'BasePipelineWithPocketFlow[T, V]':
+        """PyTorch-style alias for fit() method."""
+        return self.fit(X, y)
+    
+    def predict(self, X: T) -> V:
+        """PyTorch-style alias for transform() method."""
+        return self.transform(X)
+```
+
+**Enhanced Task Objects**:
+
+```python
+# core_tools/core/BasicTaskObjects.py (ENHANCED)
+
+# Keep all existing classes exactly as they are
+class BaseTask(ABC):
+    """Original BaseTask - UNCHANGED for backward compatibility"""
+    # ... keep all existing methods exactly as they are
+    pass
+
+# Add NEW PocketFlow-enhanced version
+class BaseTaskWithPocketFlow(BaseEstimator, Generic[T, V]):
+    """
+    PocketFlow-enhanced task that orchestrates multiple pipelines.
+    
+    This class manages the high-level workflow coordination.
+    """
+    
+    def __init__(self, pipelines: Optional[List[BasePipelineWithPocketFlow]] = None, 
+                 logger: Optional[logging.Logger] = None, 
+                 config: Optional[Dict[str, Any]] = None, **kwargs):
+        """Initialize the task with pipelines and configuration."""
+        # Set up logger
+        if logger is None:
+            self.logger = logging.getLogger(f"{self.__class__.__module__}.{self.__class__.__name__}")
+        else:
+            self.logger = logger
+            
+        # Store pipelines and config
+        self.pipelines = pipelines or []
+        self.config = config or {}
+        
+        # Initialize parameters
+        self.set_params(**kwargs)
+        
+        self.logger.info(f"Initialized {self.__class__.__name__} with {len(self.pipelines)} pipelines")
+    
+    # === scikit-learn interface ===
+    def fit(self, X: T, y: Optional[Any] = None) -> 'BaseTaskWithPocketFlow[T, V]':
+        """Fit all pipelines in sequence."""
+        self.logger.info(f"Fitting {self.__class__.__name__}")
+        
+        current_X = X
+        for i, pipeline in enumerate(self.pipelines):
+            self.logger.info(f"Fitting pipeline {i+1}/{len(self.pipelines)}: {pipeline.__class__.__name__}")
+            pipeline.fit(current_X, y)
+            current_X = pipeline.transform(current_X)
+        
+        return self
+    
+    def transform(self, X: T) -> V:
+        """Transform data through all pipelines in sequence."""
+        self.logger.info(f"Transforming with {self.__class__.__name__}")
+        
+        current_X = X
+        for i, pipeline in enumerate(self.pipelines):
+            self.logger.info(f"Running pipeline {i+1}/{len(self.pipelines)}: {pipeline.__class__.__name__}")
+            current_X = pipeline.transform(current_X)
+        
+        return current_X
+    
+    # === PyTorch-style interface ===
+    def train(self, X: T, y: Optional[Any] = None) -> 'BaseTaskWithPocketFlow[T, V]':
+        """PyTorch-style alias for fit() method."""
+        return self.fit(X, y)
+    
+    def predict(self, X: T) -> V:
+        """PyTorch-style alias for transform() method."""
+        return self.transform(X)
+    
+    def add_pipeline(self, pipeline: BasePipelineWithPocketFlow) -> None:
+        """Add a pipeline to the task."""
+        self.pipelines.append(pipeline)
+        self.logger.info(f"Added pipeline: {pipeline.__class__.__name__}")
+```
+```
+
+#### 2.3 Usage Examples
+
+**Example: Creating a Custom Kernel**:
+
+```python
+# Example: Enhanced Kernel Implementation
+import pandas as pd
+import numpy as np
+from core_tools.core.pocketflow_enhanced.base_nodes import SklearnCompatibleNode
+
+class StandardizationKernel(SklearnCompatibleNode[pd.DataFrame, None, pd.DataFrame]):
+    """A kernel that standardizes data (zero mean, unit variance)."""
+    
+    def _exec_fit(self, prep_res: Dict[str, Any]) -> pd.DataFrame:
+        """Learn mean and std from training data."""
+        X = prep_res["X"]
+        self.logger.info("Calculating mean and std for standardization")
+        self.mean_ = X.mean(axis=0)
+        self.std_ = X.std(axis=0)
+        
+        # Return standardized training data
+        return (X - self.mean_) / self.std_
+    
+    def _exec_transform(self, X: pd.DataFrame) -> pd.DataFrame:
+        """Apply standardization to new data."""
+        self.logger.debug(f"Standardizing data with mean={self.mean_.iloc[0]:.4f} and std={self.std_.iloc[0]:.4f}")
+        return (X - self.mean_) / self.std_
+
+# Usage Examples:
+# 1. Use as individual components
+standardizer = StandardizationKernel()
+X_train = pd.DataFrame(np.random.randn(100, 5))
+X_test = pd.DataFrame(np.random.randn(20, 5))
+
+# Fit and transform (scikit-learn style)
+standardizer.fit(X_train)
+X_train_scaled = standardizer.transform(X_train)
+X_test_scaled = standardizer.transform(X_test)
+
+# 2. PyTorch-style interface
+standardizer.train(X_train)
+predictions = standardizer.predict(X_test)
+
+# 3. Use enhanced versions in task/pipeline/kernel hierarchy
+preprocessing_pipeline = BasePipelineWithPocketFlow(kernels=[standardizer])
+ml_task = BaseTaskWithPocketFlow(pipelines=[preprocessing_pipeline])
+
+# 4. Integration with scikit-learn
+from sklearn.pipeline import Pipeline
+from sklearn.ensemble import RandomForestClassifier
+
+# Can be used in scikit-learn pipelines
+sklearn_pipeline = Pipeline([
+    ('preprocessing', preprocessing_pipeline),
+    ('classifier', RandomForestClassifier())
+])
+
+# All sklearn functionality works
+from sklearn.model_selection import cross_val_score, GridSearchCV
+scores = cross_val_score(sklearn_pipeline, X_train, y_train, cv=5)
+```
+```
+
+### Step 3: Pipeline-Specific Flows
+
+*Note: This section remains unchanged from the original document as it represents concrete implementation details for specific use cases.*
 
 ```python
 # core_tools/core/pocketflow_enhanced/base_flows.py
