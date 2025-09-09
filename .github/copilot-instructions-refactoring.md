@@ -5,7 +5,7 @@ title: "Agentic Refactoring and Package Development for Task-Pipeline-Kernel to 
 
 # Agentic Refactoring: Task-Pipeline-Kernel to PocketFlow Architecture
 
-> If you are an AI agent helping develop or refactor the task-pipeline-kernel architecture to PocketFlow primitives, read this guide **VERY, VERY** carefully! This refactoring maintains scikit-learn compatibility while leveraging PocketFlow's flexibility and modularity.
+> If you are an AI agent helping develop or refactor the task-pipeline-kernel architecture to PocketFlow primitives, read this guide **VERY, VERY** carefully! This refactoring maintains scikit-learn and PyTorch compatibility while leveraging PocketFlow's flexibility and modularity.
 {: .warning }
 
 ## MANDATORY: Systems Design Collaboration Required
@@ -29,7 +29,7 @@ Before implementing any refactoring, work with the user to complete these design
 Ask the user to specify:
 - **What specific problems** are they trying to solve with this refactoring?
 - **Which existing classes/pipelines** need to be refactored first (start small)?
-- **What compatibility requirements** must be maintained (scikit-learn, existing APIs)?
+- **What compatibility requirements** must be maintained (scikit-learn, PyTorch, existing APIs)?
 - **What are the success criteria** for the refactoring?
 
 #### 2. **Current Architecture Assessment** (MANDATORY)  
@@ -41,7 +41,7 @@ Work with the user to understand:
 
 #### 3. **Target Architecture Design** (MANDATORY)
 Collaborate with the user to design:
-- **Which foundational components** (EnhancedSharedStore, BaseDataNode, SklearnCompatibleNode) are needed?
+- **Which foundational components** (EnhancedSharedStore, BaseDataNode, LoggedDataNode, SklearnAndPyTorchCompatibleNode) are needed?
 - **How will data flow** through the new architecture?
 - **What the inheritance hierarchy** should look like
 - **How to maintain backward compatibility** during transition
@@ -78,22 +78,23 @@ Once I understand your needs, we'll design the target architecture together, the
 
 ### Foundational Components (New Additions)
 
-The refactoring introduces three foundational components that provide the core functionality:
+The refactoring introduces four foundational components that provide the core functionality:
 
 | Foundational Component | Purpose | Key Features |
 |:----------------------|:--------|:-------------|
 | **EnhancedSharedStore** | Data management and configuration | YAML configs, dataset storage, metadata tracking, file paths |
 | **BaseDataNode** | Base class for dataset operations | Dataset input/output handling, shared store integration |
-| **SklearnCompatibleNode** | ML compatibility foundation | scikit-learn interface (fit/transform), PyTorch interface (train/predict), type safety, logging |
+| **LoggedDataNode** | Centralized logging foundation | Task-level logging coordination, production audit trails |
+| **SklearnAndPyTorchCompatibleNode** | ML compatibility foundation | scikit-learn interface (fit/transform), PyTorch interface (train/predict), type safety, logging |
 
 ### Architecture Mapping (Building on Foundation)
 
 | Core-Tools Concept | Maps to Foundation + PocketFlow | Refactoring Strategy |
 |:-------------------|:--------------------------------|:---------------------|
-| [`BaseTask`](../../../../../../../c:/Users/ssainis/OneDrive - Intel Corporation/Desktop/python_scripts/applications.manufacturing.intel.quality.tdqr.core-tools/core_tools/core/BasicTaskObjects.py) | **SklearnCompatibleNode** → **Flow** | Enhanced BaseTask inherits from foundation, orchestrates pipeline sub-flows |
-| [`BasePipeline`](../../../../../../../c:/Users/ssainis/OneDrive - Intel Corporation/Desktop/python_scripts/applications.manufacturing.intel.quality.tdqr.core-tools/core_tools/core/BasicPipelineObjects.py) | **SklearnCompatibleNode** → **Flow** | Enhanced BasePipeline inherits from foundation, converts to specialized Flows |
-| [`BaseKernel`](../../../../../../../c:/Users/ssainis/OneDrive - Intel Corporation/Desktop/python_scripts/applications.manufacturing.intel.quality.tdqr.core-tools/core_tools/core/BasicKernelObjects.py) | **SklearnCompatibleNode** → **Node** | Enhanced BaseKernel inherits from foundation, becomes PocketFlow Node |
-| Pipeline abstract methods | **SklearnCompatibleNode** → **Node** | Each abstract method becomes specialized Node inheriting from foundation |
+| [`BaseTask`](../../../../../../../c:/Users/ssainis/OneDrive - Intel Corporation/Desktop/python_scripts/applications.manufacturing.intel.quality.tdqr.core-tools/core_tools/core/BasicTaskObjects.py) | **SklearnAndPyTorchCompatibleNode** → **Flow** | Enhanced BaseTask inherits from foundation, orchestrates pipeline sub-flows |
+| [`BasePipeline`](../../../../../../../c:/Users/ssainis/OneDrive - Intel Corporation/Desktop/python_scripts/applications.manufacturing.intel.quality.tdqr.core-tools/core_tools/core/BasicPipelineObjects.py) | **SklearnAndPyTorchCompatibleNode** → **Flow** | Enhanced BasePipeline inherits from foundation, converts to specialized Flows |
+| [`BaseKernel`](../../../../../../../c:/Users/ssainis/OneDrive - Intel Corporation/Desktop/python_scripts/applications.manufacturing.intel.quality.tdqr.core-tools/core_tools/core/BasicKernelObjects.py) | **SklearnAndPyTorchCompatibleNode** → **Node** | Enhanced BaseKernel inherits from foundation, becomes PocketFlow Node |
+| Pipeline abstract methods | **SklearnAndPyTorchCompatibleNode** → **Node** | Each abstract method becomes specialized Node inheriting from foundation |
 | YAML configuration | **EnhancedSharedStore** | Configuration management through enhanced shared store |
 | Dataset management | **EnhancedSharedStore** + **BaseDataNode** | Data flow via shared store, dataset ops via BaseDataNode |
 
@@ -151,7 +152,36 @@ core_tools/                                # Keep existing structure
 
 ### Step 2: Core Abstractions Enhancement (Non-Breaking)
 
-#### 2.1 Foundational Components
+#### 2.1 Foundational Components Architecture
+
+The refactoring follows a **layered architecture** approach where each layer adds specific capabilities:
+
+```
+PocketFlow Node (from framework)
+    ↓
+EnhancedSharedStore (adds intelligent data management)
+    ↓
+BaseDataNode (adds dataset operations)
+    ↓
+LoggedDataNode (adds centralized logging capability) 
+    ↓
+SklearnAndPyTorchCompatibleNode (adds ML compatibility)
+```
+
+**Key Design Principles:**
+- **Single Responsibility**: Each layer has one clear purpose
+- **Optional Features**: Teams can choose their foundation level based on needs
+- **Backward Compatibility**: Existing code continues to work
+- **Centralized Logging**: All components can participate in task-level logging coordination
+
+**When to Use Each Layer:**
+- **BaseDataNode**: When you need basic dataset operations without logging
+- **LoggedDataNode**: When you need centralized logging coordination (recommended for production)
+- **SklearnAndPyTorchCompatibleNode**: When you need ML compatibility with sklearn and PyTorch pipelines
+
+These components must be implemented **BEFORE** any enhanced classes that inherit from them.
+
+#### 2.2 Core Foundation Classes
 
 **Enhanced Shared Store (New Foundation)**:
 
@@ -248,7 +278,65 @@ class BaseDataNode(Node):
         return "default"
 ```
 
-**Scikit-learn Compatible Node (Foundation for ML compatibility)**:
+**Logged Data Node (Foundation for centralized logging)**:
+
+```python
+# core_tools/core/pocketflow_enhanced/base_nodes.py (continued)
+from typing import Any, Optional, Dict
+from core_tools.core.BasicMixinObjects import LoggerMixin
+
+class LoggedDataNode(BaseDataNode, LoggerMixin):
+    """
+    Data node with centralized logging capability.
+    
+    This serves as the foundation for all nodes that need logging integrated
+    with the task-level logging system.
+    """
+    
+    def __init__(self, component_name: str = None, task_log_manager=None, **kwargs):
+        BaseDataNode.__init__(self, **kwargs)
+        
+        # Set up centralized logging
+        component_name = component_name or self.__class__.__name__
+        LoggerMixin.__init__(self, component_name=component_name, task_log_manager=task_log_manager)
+        
+        self._log_debug(f"Initialized {self.__class__.__name__} with logging")
+    
+    def prep(self, shared):
+        """Prepare data with logging."""
+        self._log_debug(f"Starting prep phase for {self.__class__.__name__}")
+        
+        # Extract task log manager from shared store if available
+        if hasattr(shared, 'task_log_manager') and not hasattr(self.logger, 'task_log_manager'):
+            # Re-initialize logger with task manager
+            LoggerMixin.__init__(self, component_name=self.__class__.__name__, 
+                               task_log_manager=shared.task_log_manager)
+        
+        result = super().prep(shared)
+        self._log_debug(f"Prep phase completed for {self.__class__.__name__}")
+        return result
+    
+    def post(self, shared, prep_res, exec_res):
+        """Post-process with logging."""
+        self._log_debug(f"Starting post phase for {self.__class__.__name__}")
+        result = super().post(shared, prep_res, exec_res)
+        self._log_debug(f"Post phase completed for {self.__class__.__name__}")
+        return result
+    
+    def run(self, shared):
+        """Run with comprehensive logging."""
+        self._log_info(f"Starting execution of {self.__class__.__name__}")
+        
+        try:
+            result = super().run(shared)
+            self._log_info(f"Successfully completed {self.__class__.__name__}")
+            return result
+        except Exception as e:
+            self._log_error(f"Failed execution of {self.__class__.__name__}: {str(e)}")
+            raise
+```
+
+**Scikit-learn and PyTorch Compatible Node (Foundation for ML compatibility)**:
 
 ```python
 # core_tools/core/pocketflow_enhanced/base_nodes.py (continued)
@@ -261,21 +349,16 @@ T = TypeVar('T')  # Working dataset type
 U = TypeVar('U')  # Ancilliary dataset type
 V = TypeVar('V')  # Result type
 
-class SklearnCompatibleNode(BaseDataNode, BaseEstimator, TransformerMixin, Generic[T, U, V]):
+class SklearnAndPyTorchCompatibleNode(LoggedDataNode, BaseEstimator, TransformerMixin, Generic[T, U, V]):
     """
-    Node that maintains scikit-learn compatibility with mode-aware execution.
+    Node that maintains scikit-learn and PyTorch compatibility with mode-aware execution.
     
     This serves as the foundation for all ML-compatible kernels and nodes.
+    Inherits centralized logging from LoggedDataNode.
     """
     
-    def __init__(self, logger: Optional[logging.Logger] = None, **kwargs):
+    def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        
-        # Set up logger
-        if logger is None:
-            self.logger = logging.getLogger(f"{self.__class__.__module__}.{self.__class__.__name__}")
-        else:
-            self.logger = logger
         
         # Scikit-learn compatibility attributes
         self.is_fitted_ = False
@@ -285,13 +368,13 @@ class SklearnCompatibleNode(BaseDataNode, BaseEstimator, TransformerMixin, Gener
         # Initialize sklearn params
         self.set_params(**kwargs)
         
-        self.logger.debug(f"Initialized {self.__class__.__name__} with params: {kwargs}")
+        self._log_debug(f"Initialized {self.__class__.__name__} with sklearn compatibility")
     
     # === scikit-learn interface ===
-    def fit(self, X: T, y: Optional[U] = None) -> 'SklearnCompatibleNode[T, U, V]':
+    def fit(self, X: T, y: Optional[U] = None) -> 'SklearnAndPyTorchCompatibleNode[T, U, V]':
         """Scikit-learn compatible fit method."""
-        self.logger.info(f"Fitting {self.__class__.__name__}")
-        self.logger.debug(f"Fit input X shape: {getattr(X, 'shape', None)}")
+        self._log_info(f"Fitting {self.__class__.__name__}")
+        self._log_debug(f"Fit input X shape: {getattr(X, 'shape', None)}")
         
         # Store scikit-learn metadata
         self.feature_names_in_ = X.columns.tolist() if hasattr(X, 'columns') else None
@@ -305,9 +388,9 @@ class SklearnCompatibleNode(BaseDataNode, BaseEstimator, TransformerMixin, Gener
         }
         
         # Execute using PocketFlow
-        self.logger.debug("Starting PocketFlow node execution in fit mode")
+        self._log_debug("Starting PocketFlow node execution in fit mode")
         self.run(shared)
-        self.logger.debug("Completed PocketFlow node execution in fit mode")
+        self._log_debug("Completed PocketFlow node execution in fit mode")
         
         self.is_fitted_ = True
         return self
@@ -317,7 +400,7 @@ class SklearnCompatibleNode(BaseDataNode, BaseEstimator, TransformerMixin, Gener
         if not self.is_fitted_:
             raise ValueError("This node has not been fitted yet.")
             
-        self.logger.info(f"Transforming with {self.__class__.__name__}")
+        self._log_info(f"Transforming with {self.__class__.__name__}")
         self.logger.debug(f"Transform input X shape: {getattr(X, 'shape', None)}")
         
         # Create shared store for transform operation
@@ -341,7 +424,7 @@ class SklearnCompatibleNode(BaseDataNode, BaseEstimator, TransformerMixin, Gener
         return self.fit(X, y).transform(X)
     
     # === PyTorch-style interface ===
-    def train(self, X: T, y: Optional[U] = None) -> 'SklearnCompatibleNode[T, U, V]':
+    def train(self, X: T, y: Optional[U] = None) -> 'SklearnAndPyTorchCompatibleNode[T, U, V]':
         """PyTorch-style alias for fit() method."""
         self.logger.info(f"Training {self.__class__.__name__} (alias for fit)")
         return self.fit(X, y)
@@ -424,7 +507,47 @@ class SklearnCompatibleNode(BaseDataNode, BaseEstimator, TransformerMixin, Gener
         return "default"
 ```
 
-#### 2.2 Enhanced Existing Classes (Building on Foundation)
+#### 2.3 Practical Usage: Choosing Your Foundation Layer
+
+Teams can choose the appropriate foundation layer based on their needs:
+
+```python
+# Option 1: Minimal - No logging, just data operations
+class SimpleDataProcessor(BaseDataNode):
+    def exec(self, prep_result):
+        # Just process data, no logging
+        return process_data(prep_result["dataset"])
+
+# Option 2: Production - With centralized logging (RECOMMENDED)
+class ProductionDataProcessor(LoggedDataNode):
+    def exec(self, prep_result):
+        self._log_info("Starting data processing")
+        result = process_data(prep_result["dataset"])
+        self._log_info(f"Processed {len(result)} records")
+        return result
+
+# Option 3: ML Pipeline - Full sklearn + PyTorch compatibility + logging
+class MLDataProcessor(SklearnAndPyTorchCompatibleNode):
+    def _exec_fit(self, prep_res):
+        self._log_info("Training data processor")
+        # ML training logic here (sklearn or PyTorch)
+        return trained_processor
+    
+    def _exec_transform(self, X):
+        self._log_info("Applying trained processor")
+        # ML inference logic here (sklearn or PyTorch)
+        return transformed_data
+
+# All three approaches work with existing code, teams choose based on needs
+```
+
+**Key Benefits of This Approach:**
+- ✅ **Non-Breaking**: Existing code continues to work
+- ✅ **Progressive Enhancement**: Teams adopt features gradually
+- ✅ **Centralized Logging**: Production deployments get full audit trails
+- ✅ **Clean Architecture**: Clear separation of concerns
+
+#### 2.4 Enhanced Existing Classes (Building on Foundation)
 
 Now that we have the foundational components, we can enhance the existing classes by inheriting from them:
 
@@ -440,10 +563,10 @@ class BaseKernel(ABC):
     # ... keep all existing methods exactly as they are
     pass
 
-# Add NEW PocketFlow-enhanced version that inherits from SklearnCompatibleNode
-class BaseKernelWithPocketFlow(SklearnCompatibleNode[T, U, V]):
+# Add NEW PocketFlow-enhanced version that inherits from SklearnAndPyTorchCompatibleNode
+class BaseKernelWithPocketFlow(SklearnAndPyTorchCompatibleNode[T, U, V]):
     """
-    PocketFlow-enhanced kernel that inherits from SklearnCompatibleNode.
+    PocketFlow-enhanced kernel that inherits from SklearnAndPyTorchCompatibleNode.
     
     This provides all the scikit-learn compatibility, PyTorch-style interface,
     and PocketFlow execution capabilities from the base class.
@@ -459,7 +582,7 @@ class BaseKernelWithPocketFlow(SklearnCompatibleNode[T, U, V]):
         super().__init__(**kwargs)
         self.logger.info(f"Initialized {self.__class__.__name__} as PocketFlow-enhanced kernel")
     
-    # The fit, transform, train, predict methods are inherited from SklearnCompatibleNode
+    # The fit, transform, train, predict methods are inherited from SklearnAndPyTorchCompatibleNode
     # The prep, exec, post methods are inherited and can be overridden for custom behavior
     
     # Override these methods in concrete implementations:
@@ -488,7 +611,7 @@ class BasePipeline(ABC):
 # Add NEW PocketFlow-enhanced version that combines Flow with sklearn compatibility
 class BasePipelineWithPocketFlow(Flow, BaseEstimator, TransformerMixin, Generic[T, V]):
     """
-    PocketFlow-enhanced pipeline that combines Flow with scikit-learn compatibility.
+    PocketFlow-enhanced pipeline that combines Flow with scikit-learn and PyTorch compatibility.
     
     This class orchestrates multiple BaseKernelWithPocketFlow instances.
     """
@@ -641,9 +764,9 @@ class BaseTaskWithPocketFlow(BaseEstimator, Generic[T, V]):
 # Example: Enhanced Kernel Implementation
 import pandas as pd
 import numpy as np
-from core_tools.core.pocketflow_enhanced.base_nodes import SklearnCompatibleNode
+from core_tools.core.pocketflow_enhanced.base_nodes import SklearnAndPyTorchCompatibleNode
 
-class StandardizationKernel(SklearnCompatibleNode[pd.DataFrame, None, pd.DataFrame]):
+class StandardizationKernel(SklearnAndPyTorchCompatibleNode[pd.DataFrame, None, pd.DataFrame]):
     """A kernel that standardizes data (zero mean, unit variance)."""
     
     def _exec_fit(self, prep_res: Dict[str, Any]) -> pd.DataFrame:
@@ -814,11 +937,11 @@ class PreProcessingFlow(Flow):
         self.config = config
 
 # src/pocketflow_core_tools/pipelines/preprocessing/nodes.py
-from ...core.base_nodes import SklearnCompatibleNode
+from ...core.base_nodes import SklearnAndPyTorchCompatibleNode
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 import pandas as pd
 
-class FilterDataNode(SklearnCompatibleNode):
+class FilterDataNode(SklearnAndPyTorchCompatibleNode):
     """Node for data filtering operations."""
     
     def _fit_impl(self, X, y=None):
@@ -839,7 +962,7 @@ class FilterDataNode(SklearnCompatibleNode):
         # Implement actual filtering
         return X
 
-class EncodeDataNode(SklearnCompatibleNode):
+class EncodeDataNode(SklearnAndPyTorchCompatibleNode):
     """Node for data encoding operations."""
     
     def __init__(self, **kwargs):
@@ -874,7 +997,7 @@ class EncodeDataNode(SklearnCompatibleNode):
         
         return result_dataset
 
-class NormalizeDataNode(SklearnCompatibleNode):
+class NormalizeDataNode(SklearnAndPyTorchCompatibleNode):
     """Node for data normalization operations."""
     
     def __init__(self, **kwargs):
@@ -1019,7 +1142,7 @@ class BatchExperimentFlow(BatchFlow):
         return [{"experiment_config": config} for config in experiment_configs]
 ```
 
-### Step 5: Scikit-learn Compatibility Layer
+### Step 5: Scikit-learn and PyTorch Compatibility Layer
 
 ```python
 # src/pocketflow_core_tools/utils/sklearn_compatibility.py
@@ -1029,7 +1152,7 @@ from sklearn.base import BaseEstimator, TransformerMixin
 from ..core.shared_store import EnhancedSharedStore
 
 class PocketFlowSklearnWrapper(BaseEstimator, TransformerMixin):
-    """Wrapper to make PocketFlow flows compatible with scikit-learn pipelines."""
+    """Wrapper to make PocketFlow flows compatible with scikit-learn and PyTorch pipelines."""
     
     def __init__(self, flow_class, flow_config: dict):
         self.flow_class = flow_class
